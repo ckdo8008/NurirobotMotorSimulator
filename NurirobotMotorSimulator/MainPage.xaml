@@ -48,6 +48,20 @@
         <StackPanel Grid.Row="1" Orientation="Horizontal"  >
             <ComboBox x:Name="Comports">
             </ComboBox>
+            <ComboBox x:Name="BPS" SelectedIndex="9">
+                <x:String>9600</x:String>
+                <x:String>14400</x:String>
+                <x:String>19200</x:String>
+                <x:String>28800</x:String>
+                <x:String>38400</x:String>
+                <x:String>57600</x:String>
+                <x:String>76800</x:String>
+                <x:String>115200</x:String>
+                <x:String>230400</x:String>
+                <x:String>250000</x:String>
+                <x:String>500000</x:String>
+                <x:String>1000000</x:String>
+            </ComboBox>
             <Button Margin="5, 0" Click="Button_Click">Start</Button>
             <Button Margin="5, 0" Click="Button_Click_2">Stop</Button>
             <Button Margin="5, 0" Click="Button_Click_1">5sec Stop</Button>
