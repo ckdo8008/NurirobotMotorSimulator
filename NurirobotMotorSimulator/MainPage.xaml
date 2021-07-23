@@ -62,6 +62,10 @@
                 <x:String>500000</x:String>
                 <x:String>1000000</x:String>
             </ComboBox>
+            <!--<ComboBox x:Name="Type" SelectedIndex="0">
+                <x:String>MC</x:String>
+                <x:String>RSA</x:String>
+            </ComboBox>-->
             <Button Margin="5, 0" Click="Button_Click">Start</Button>
             <Button Margin="5, 0" Click="Button_Click_2">Stop</Button>
             <Button Margin="5, 0" Click="Button_Click_1">5sec Stop</Button>

@@ -1,10 +1,16 @@
-﻿using NurirobotMotorSimulator.Helpers;
+﻿using LibNuriMotor;
+using LibNuriMotor.Enum;
+using LibNuriMotor.Struct;
+using NetMQ;
+using NetMQ.Sockets;
+using NurirobotMotorSimulator.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.System;
@@ -25,34 +31,35 @@ namespace NurirobotMotorSimulator.UI
     [TemplatePart(Name = CurrentPartName, Type = typeof(Path))]
     [TemplatePart(Name = CurrentBasePartName, Type = typeof(Path))]
     [TemplatePart(Name = MoterIDName, Type = typeof(ComboBox))]
+    [TemplatePart(Name = MoterTypeName, Type = typeof(ComboBox))]
     public sealed class MotorGauge : Control
     {
 
         public static readonly DependencyProperty POSValueProperty =
     DependencyProperty.Register(
-        nameof(POSValue), 
-        typeof(double), 
-        typeof(MotorGauge), 
+        nameof(POSValue),
+        typeof(double),
+        typeof(MotorGauge),
         new PropertyMetadata(
-            0.0, 
+            0.0,
             new PropertyChangedCallback(OnPOSPropertyChanged)));
 
         public static readonly DependencyProperty SpeedValueProperty =
     DependencyProperty.Register(
-        nameof(SpeedValue), 
-        typeof(double), 
-        typeof(MotorGauge), 
+        nameof(SpeedValue),
+        typeof(double),
+        typeof(MotorGauge),
         new PropertyMetadata(
-            0.0, 
+            0.0,
             new PropertyChangedCallback(OnSpeedPropertyChanged)));
 
         public static readonly DependencyProperty CurrentValueProperty =
     DependencyProperty.Register(
-        nameof(CurrentValue), 
-        typeof(double), 
-        typeof(MotorGauge), 
+        nameof(CurrentValue),
+        typeof(double),
+        typeof(MotorGauge),
         new PropertyMetadata(
-            0.0, 
+            0.0,
             new PropertyChangedCallback(OnCurrentPropertyChanged)));
 
         public double POSValue {
@@ -119,7 +126,7 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
 
         public static readonly DependencyProperty TrailBrushProperty =
     DependencyProperty.Register(nameof(TrailBrush), typeof(Brush), typeof(MotorGauge), new PropertyMetadata(null));
-        
+
         public static readonly DependencyProperty ScaleBrushProperty =
             DependencyProperty.Register(nameof(ScaleBrush), typeof(Brush), typeof(MotorGauge), new PropertyMetadata(null));
 
@@ -155,10 +162,11 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
 
         public static readonly DependencyProperty MotorIDProperty =
     DependencyProperty.Register(nameof(MotorID), typeof(int), typeof(MotorGauge), new PropertyMetadata(1));
+        //static string CustMID = "0";
         public int MotorID
         {
             get { return (int)GetValue(MotorIDProperty); }
-            set { 
+            set {
                 SetValue(MotorIDProperty, value);
 
                 if (_MotorID != null)
@@ -170,14 +178,29 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
             }
         }
 
+        public static readonly DependencyProperty MotorTypeProperty =
+DependencyProperty.Register(nameof(MotorType), typeof(string), typeof(MotorGauge), new PropertyMetadata("MC"));
+
+        public string MotorType
+        {
+            get { return (string)GetValue(MotorTypeProperty); }
+            set {
+                SetValue(MotorTypeProperty, value);
+                if (_MotorType != null)
+                {
+                    _MotorType.SelectedItem = _MotorType.Items.Where(x => x.Equals(MotorType)).FirstOrDefault();
+                }
+            }
+        }
+
         /// <summary>
         /// 역회전 여부
         /// </summary>
-        public bool IsReverse
+        private volatile bool IsReverse = false;
+        private void SetIsReverse(bool arg)
         {
-            get;
-            set;
-        } = false;
+            IsReverse = arg;
+        }
 
         public bool IsRunning
         {
@@ -190,6 +213,12 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
             get;
             set;
         } = false;
+
+        private volatile bool IsWantPOS = false;
+        private void SetIsWantPOS(bool arg) => IsWantPOS = arg;
+
+        //private volatile bool IsWantSpeedPOS = false;
+        //private void SetIsWantSpeedPOS(bool arg) => IsWantSpeedPOS = arg;
 
         public double POSStep
         {
@@ -231,6 +260,7 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
         private SpriteVisual _Currentneedle;
 
         private ComboBox _MotorID = null;
+        private ComboBox _MotorType = null;
 
         private const string ContainerPartName = "PART_Container";
         private const string SpeedPartName = "PART_Speed";
@@ -240,8 +270,46 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
         private const string CurrentBasePartName = "PART_CurrentBase";
 
         private const string MoterIDName = "PART_MoterID";
+        private const string MoterTypeName = "PART_MotorType";
 
         private DispatcherTimer _Timer;
+        private SubscriberSocket subscriber;
+        private PublisherSocket publisherSocket;
+        private CancellationTokenSource mCTS;
+
+        /// <summary>
+        /// 위치제어
+        /// </summary>
+        private volatile bool IsPosControl = false;
+        private void SetIsPosControl (bool arg) => IsPosControl = arg;
+
+        /// <summary>
+        /// 제어 온오프 설정
+        /// </summary>
+        private volatile bool IsControlOnOff = true;
+        private void SetIsControlOnOff(bool arg) => IsControlOnOff = arg;
+
+        /// <summary>
+        /// 절대위치제어여부
+        /// </summary>
+        private volatile bool IsAbsolutePotionCtrl = true;
+        private void SetIsAbsolutePotionCtrl(bool arg) => IsAbsolutePotionCtrl = arg;
+
+        /// <summary>
+        /// 응답 대기 시간
+        /// </summary>
+        private volatile int ResponseWait = 10;
+        private void SetResponseWait(int arg) => ResponseWait = arg;
+
+        private volatile float WantPOS = 0f;
+        private void SetWantPOS(float arg) => WantPOS = arg;
+
+        private volatile float WantSpeed = 0f;
+        private void SetWantSpeed(float arg) => WantSpeed = arg;
+
+        private volatile float NowPOS = 0f;
+        private volatile float NowSpeed = 0f;
+        private volatile float NowCurrent = 0f;
 
         public MotorGauge()
         {
@@ -251,6 +319,412 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
             _Timer.Interval = TimeSpan.FromMilliseconds(25);
             _Timer.Tick += _Timer_Tick;
             _Timer.Start();
+            mCTS = new CancellationTokenSource();
+            publisherSocket = new PublisherSocket();
+            publisherSocket.Connect("inproc://sendData");
+        }
+        ~MotorGauge()
+        {
+
+        }
+
+        private void Subscriber()
+        {
+            if (subscriber != null)
+            {
+                mCTS.Cancel();
+                subscriber.Dispose();
+                mCTS.Dispose();
+            }
+
+            mCTS = new CancellationTokenSource();
+            subscriber = new SubscriberSocket();
+            subscriber.Connect("inproc://pushData");
+            subscriber.SubscribeToAnyTopic();
+            string CustMID = MotorID.ToString();
+            byte MotorIDNo = (byte)MotorID;
+            bool isMc = MotorType.Equals("MC") ? true : false;
+            Debug.WriteLine(string.Format("Subscribe : {0}", CustMID));
+            Task t = new Task(() =>
+            {
+                try
+                {
+                    while (true)
+                    {
+                        mCTS.Token.ThrowIfCancellationRequested();
+                        string topic = subscriber.ReceiveFrameString();
+                        if ("ALL".Equals(topic) || CustMID.Equals(topic))
+                        {
+                            byte[] messageReceived = subscriber.ReceiveFrameBytes();
+                            if (isMc)
+                                ReciveMC(messageReceived, this);
+                            else
+                                ReciveRSA(messageReceived, this);
+                        }
+                    }
+                } catch(Exception ex)
+                {
+                    Debug.WriteLine(ex);
+                }
+            });
+            t.Start();
+        }
+        
+        private byte GetID()
+        {
+            byte id = 0x0;
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+               () =>
+               {
+                   id = (byte)this.MotorID;
+               }).AsTask();
+            tmp.Wait();
+            sw.Stop();
+            //Debug.WriteLine(string.Format("Delay : {0}", sw.ElapsedTicks));
+            return id;
+        }
+
+        private async void ReciveMC(byte[] arg, MotorGauge obj)
+        {
+            try
+            {
+                //Debug.WriteLine(string.Format("MC ====== recv : {0}", BitConverter.ToString(arg).Replace("-", "")));
+                NurirobotMC mc = new NurirobotMC();
+                mc.Parse(arg);
+                byte id = GetID();
+
+                if (string.Equals(mc.PacketName, "CTRLPosSpeed"))
+                {
+                    var objrecv = (NuriPosSpeedAclCtrl)mc.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetWantPOS(objrecv.Pos);
+                           SetWantSpeed(objrecv.Speed);
+                           //SetIsReverse(objrecv.Direction == Direction.CCW ? true : false);
+                           SetIsReverse(POSValue >= objrecv.Pos ? true : false);
+                           SetIsWantPOS(true);
+                           //SetIsWantSpeedPOS(true);
+
+                           LastTime = DateTime.Now;
+                           RemainingTime = 0;
+                           IsRunning = true;
+                       }).AsTask();
+                    tmp.Wait();
+
+                    return;
+                }
+                else if (string.Equals(mc.PacketName, "CTRLAccPos"))
+                {
+                    var objrecv = (NuriPosSpeedAclCtrl)mc.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetWantPOS(objrecv.Pos);
+
+                           //SetWantSpeed(0);
+                           float spd = 0f;
+                           var high = Math.Max(POSValue, objrecv.Pos);
+                           var low = Math.Min(POSValue, objrecv.Pos);
+                           var termpos = high - low;
+                           spd = (float)(termpos / (objrecv.Arrivetime * 1000f / 100f) * 7f);
+                           SetWantSpeed(spd);
+                           //SetIsReverse(objrecv.Direction == Direction.CCW ? true : false);
+                           SetIsReverse(POSValue >= objrecv.Pos ? true : false);
+                           SetIsWantPOS(true);
+                           //SetIsWantSpeedPOS(false);
+
+                           LastTime = DateTime.Now;
+                           RemainingTime = objrecv.Arrivetime * 1000;
+                           IsRunning = true;
+                       }).AsTask();
+                    tmp.Wait();
+                    return;
+                }
+                else if (string.Equals(mc.PacketName, "CTRLAccSpeed"))
+                {
+                    var objrecv = (NuriPosSpeedAclCtrl)mc.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetWantPOS(9999f);
+                           SetWantSpeed(objrecv.Speed);
+                           SetIsReverse(objrecv.Direction == Direction.CCW ? true : false);
+                           SetIsWantPOS(false);
+
+                           if (objrecv.Speed == 0)
+                           {
+                               if (IsRunning)
+                               {
+                                   LastTime = DateTime.Now;
+                                   RemainingTime = objrecv.Arrivetime * 1000;
+                                   IsStop = true;
+                               }
+                           }
+                           else
+                           {
+                               if (!IsRunning)
+                               {
+                                   LastTime = DateTime.Now;
+                                   RemainingTime = objrecv.Arrivetime * 1000;
+                                   IsRunning = true;
+                               } else
+                               {
+                                   LastTime = DateTime.Now;
+                                   RemainingTime = objrecv.Arrivetime * 1000;
+                               }
+                           }
+                       }).AsTask();
+                    tmp.Wait();
+                    return;
+                }
+                else if (string.Equals(mc.PacketName, "SETPosCtrl"))
+                {
+                    var objrecv = (NuriPosSpdCtrl)mc.GetDataStruct();
+
+                    return;
+                }
+                else if (string.Equals(mc.PacketName, "SETSpeedCtrl"))
+                {
+                    var objrecv = (NuriPosSpdCtrl)mc.GetDataStruct();
+
+                    return;
+                }
+                //else if (string.Equals(mc.PacketName, "SETID"))
+                //{
+                //    return;
+                //}
+                //else if (string.Equals(mc.PacketName, "SETBaudrate"))
+                //{
+                //    return;
+                //}
+                else if (string.Equals(mc.PacketName, "SETResptime"))
+                {
+                    var objrecv = (NuriResponsetime)mc.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetResponseWait(objrecv.Responsetime);
+                       }).AsTask();
+                    tmp.Wait();
+                    return;
+                }
+                else if (string.Equals(mc.PacketName, "SETRatedSPD"))
+                {
+                    var objrecv = (NuriRatedSpeed)mc.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           MotorRPM = objrecv.Speed;
+                       }).AsTask();
+                    tmp.Wait();
+
+                    return;
+                }
+                //else if (string.Equals(mc.PacketName, "SETResolution"))
+                //{
+                //    return;
+                //}
+                //else if (string.Equals(mc.PacketName, "SETRatio"))
+                //{
+                //    return;
+                //}
+                else if (string.Equals(mc.PacketName, "SETCtrlOnOff"))
+                {
+                    var objrecv = (NuriControlOnOff)mc.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetIsControlOnOff(objrecv.IsCtrlOn);
+                       }).AsTask();
+                    tmp.Wait();
+
+                    return;
+                }
+                else if (string.Equals(mc.PacketName, "SETPosCtrlMode"))
+                {
+                    var objrecv = (NuriPositionCtrl)mc.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetIsAbsolutePotionCtrl(objrecv.IsAbsolutePotionCtrl);
+                       }).AsTask();
+                    tmp.Wait();
+
+                    return;
+                }
+                else if (string.Equals(mc.PacketName, "SETCtrlDirt"))
+                {
+                    var objrecv = (NuriCtrlDirection)mc.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetIsReverse(objrecv.Direction == Direction.CCW);
+                       }).AsTask();
+                    tmp.Wait();
+
+                    return;
+                }
+                else if (string.Equals(mc.PacketName, "RESETPos"))
+                {
+                   var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           POSValue = 0d;
+                       }).AsTask();
+                    tmp.Wait();
+
+                    return;
+                }
+                else if (string.Equals(mc.PacketName, "RESETFactory"))
+                {
+                    return;
+                }
+                else if (string.Equals(mc.PacketName, "REQPing"))
+                {
+                    mc.PROT_FeedbackPing(new NuriProtocol
+                    {
+                        ID = id
+                    });
+                }
+                else if (string.Equals(mc.PacketName, "REQPos"))
+                {
+                    mc.PROT_FeedbackPOS(new NuriPosSpeedAclCtrl
+                    {
+                        ID = id,
+                        Direction = IsReverse ? Direction.CCW : Direction.CW,
+                        Pos = NowPOS,
+                        Speed = NowSpeed,
+                        Current = (short)(NowCurrent * 10)
+                    });
+                }
+                else if (string.Equals(mc.PacketName, "REQSpeed"))
+                {
+                    mc.PROT_FeedbackSpeed(new NuriPosSpeedAclCtrl
+                    {
+                        ID = id,
+                        Direction = IsReverse ? Direction.CCW : Direction.CW,
+                        Pos = NowPOS,
+                        Speed = NowSpeed,
+                        Current = (short)(NowCurrent * 10)
+                    });
+                }
+                else if (string.Equals(mc.PacketName, "REQPosCtrl"))
+                {
+                    mc.PROT_FeedbackPosControl(new NuriPosSpdCtrl
+                    {
+                        ID = id,
+                        //Protocol = (byte)ProtocolMode.FEEDPosCtrl,
+                        //Direction = 
+                    });
+                }
+                else if (string.Equals(mc.PacketName, "REQSpdCtrl"))
+                {
+                    mc.PROT_FeedbackSpeedControl(new NuriPosSpdCtrl
+                    {
+                        ID = id,
+                        //Protocol = (byte)ProtocolMode.FEEDSpdCtrl,
+                        //Direction = 
+                    });
+                }
+                else if (string.Equals(mc.PacketName, "REQResptime"))
+                {
+                    mc.PROT_FeedbackResponsetime(new NuriResponsetime
+                    {
+                        ID = id,
+                        Responsetime = (short)ResponseWait
+                    });
+                }
+                else if (string.Equals(mc.PacketName, "REQRatedSPD"))
+                {
+                    int speed = 0;
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           speed = MotorRPM;
+                       }).AsTask();
+                    tmp.Wait();
+
+                    mc.PROT_FeedbackRatedSpeed(new NuriRatedSpeed
+                    {
+                        ID = id,
+                        Speed = (ushort)speed
+                    });
+                }
+                else if (string.Equals(mc.PacketName, "REQResolution"))
+                {
+                    mc.PROT_FeedbackResolution(new NuriResolution
+                    {
+                        ID = id
+                    });
+                }
+                else if (string.Equals(mc.PacketName, "REQRatio"))
+                {
+                    mc.PROT_FeedbackRatio(new NuriRatio
+                    {
+                        ID = id
+                    });
+                }
+                else if (string.Equals(mc.PacketName, "REQCtrlOnOff"))
+                {
+                    mc.PROT_FeedbackControlOnOff(new NuriControlOnOff
+                    {
+                        ID = id,
+                        IsCtrlOn = IsControlOnOff
+                    });
+                }
+                else if (string.Equals(mc.PacketName, "REQPosCtrlMode"))
+                {
+                    mc.PROT_FeedbackPositionControl(new NuriPositionCtrl
+                    {
+                        ID = id,
+                        IsAbsolutePotionCtrl = IsAbsolutePotionCtrl
+                    });
+                }
+                else if (string.Equals(mc.PacketName, "REQCtrlDirt"))
+                {
+                    mc.PROT_FeedbackControlDirection(new NuriCtrlDirection
+                    {
+                        ID = id,
+                        Direction = IsReverse ? Direction.CCW : Direction.CW
+                    });
+                }
+                else if (string.Equals(mc.PacketName, "REQFirmware"))
+                {
+                    mc.PROT_FeedbackFirmware(new NuriVersion
+                    {
+                        ID = id
+                    });
+                }
+                else
+                {
+                    return;
+                }
+
+                //Thread.Sleep(ResponseWait);
+                var wait = Wait.Start(ResponseWait);
+                wait.Sleep();
+                publisherSocket.SendMoreFrame("SEND").SendFrame(mc.Data);
+            } catch (Exception e)
+            {
+                Debug.WriteLine(e);
+            }
+        }
+
+        private void ReciveRSA(byte[] arg, MotorGauge obj)
+        {
+            try
+            {
+                Debug.WriteLine(string.Format("RSA ====== recv : {0}", BitConverter.ToString(arg).Replace("-", "")));
+                NurirobotRSA rsa = new NurirobotRSA();
+
+            }
+            catch
+            {
+
+            }
         }
 
         private double easeInSine(double x)
@@ -266,11 +740,15 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
             
             var tmp = POSValue;
             var term = Math.Min((DateTime.Now - LastTime).TotalMilliseconds, RemainingTime);
+            bool isminus = false;
 
             if (!IsStop)
             {
                 // 정상
-                POSStep = MotorRPM / 60 * 360 * (25f / 1000) * easeInSine(term / RemainingTime);
+                if (RemainingTime == 0)
+                    POSStep = WantSpeed / 60 * 360 * (25f / 1000);
+                else
+                    POSStep = WantSpeed / 60 * 360 * (25f / 1000) * easeInSine(term / RemainingTime);
             }
             else
             {
@@ -278,7 +756,7 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
                     POSStep = 0;
                 else
                 {
-                    POSStep = MotorRPM / 60 * 360 * (25f / 1000) - (MotorRPM / 60 * 360 * (25f / 1000) * easeInSine(term / RemainingTime));
+                    POSStep = WantSpeed / 60 * 360 * (25f / 1000) - (WantSpeed / 60 * 360 * (25f / 1000) * easeInSine(term / RemainingTime));
                 }
 
                 // 중지
@@ -292,20 +770,75 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
 
             if (IsReverse)
             {
-                tmp = tmp - POSStep;
+                if (WantSpeed >= SpeedValue)
+                    tmp -= POSStep;
+                else
+                    tmp += POSStep;
+
                 if (tmp < 0)
                 {
-                    tmp = 360 + tmp;
+                    tmp = 655 + (tmp % 655);
+                    isminus = true;
                 }
             }
             else
             {
-                tmp = tmp + POSStep;
+                if (WantSpeed >= SpeedValue)
+                    tmp += POSStep;
+                else
+                    tmp -= POSStep;
+
+                if (tmp < 0)
+                {
+                    tmp = 655 + (tmp % 655);
+                    isminus = true;
+                }
             }
 
-            POSValue = tmp % 360;
-            SpeedValue = POSStep / (25f / 1000) / 360 * 60;
+            //POSValue = ((int)(tmp * 100) % 65535) / 100f;
+            POSValue = tmp;
+            if (tmp > 655.35)
+                POSValue = tmp - 655.35d;
+
+            SpeedValue = ((long)((POSStep / (25f / 1000) / 360 * 60) * 10000) /  10000f);
             CurrentValue = SpeedValue / 2;
+            if (IsWantPOS)
+            {
+                if (IsReverse)
+                {
+                    if (WantPOS >= POSValue)
+                    {
+                        POSValue = WantPOS;
+                        SpeedValue = 0;
+                        CurrentValue = 0;
+                        IsRunning = false;
+                        IsStop = false;
+                    }
+                }
+                else
+                {
+                    if (WantPOS <= POSValue)
+                    {
+                        POSValue = WantPOS;
+                        SpeedValue = 0;
+                        CurrentValue = 0;
+                        IsRunning = false;
+                        IsStop = false;
+                    }
+                }
+                
+                if (isminus || tmp > 655.35f)
+                {
+                    POSValue = WantPOS;
+                    SpeedValue = 0;
+                    CurrentValue = 0;
+                    IsRunning = false;
+                    IsStop = false;
+                }
+            }
+            NowPOS = (float)POSValue;
+            NowSpeed = (float)SpeedValue;
+            NowCurrent = (float)CurrentValue;
             Debug.WriteLine("{3} {0} {1} {2}", term, POSValue, POSStep, DateTime.Now);
         }
 
@@ -333,11 +866,28 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
             _MotorID.SelectionChanged += _MotorID_SelectionChanged;
             MotorID = MotorID;
 
+            _MotorType = this.GetTemplateChild(MoterTypeName) as ComboBox;
+            _MotorType.SelectionChanged += _MotorType_SelectionChanged;
+            MotorType = MotorType;
+
+            Subscriber();
+
             ThemeListener.ThemeChanged += ThemeListener_ThemeChanged;
             KeyDown += MotorGauge_KeyDown;
             OnColorsChanged();
 
             base.OnApplyTemplate();
+        }
+
+        private void _MotorType_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            Debug.WriteLine(_MotorType.SelectedValue);
+            string tmp = (string)_MotorType.SelectedValue;
+            if (MotorType == tmp)
+                return;
+
+            MotorType = tmp;
+            Subscriber();
         }
 
         private void _MotorID_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -348,6 +898,7 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
                 return;
 
             MotorID = tmp;
+            Subscriber();
         }
 
         private void MotorGauge_KeyDown(object sender, Windows.UI.Xaml.Input.KeyRoutedEventArgs e)
@@ -550,7 +1101,7 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
                 if (gauge._POSneedle != null)
                 {
                     //gauge._POSneedle.StartAnimation
-                    gauge._POSneedle.RotationAngleInDegrees = (float)gauge.POSValue;
+                    gauge._POSneedle.RotationAngleInDegrees = (float)(gauge.POSValue / 655.35d * 720f);
                 }
             }
         }
@@ -574,7 +1125,7 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
 
             if (!double.IsNaN(gauge.SpeedValue))
             {
-                float angle = (float)ValueToSpeedAngle(gauge.SpeedValue);
+                float angle = (float)ValueToSpeedAngle(gauge.SpeedValue, gauge.MotorRPM);
                 if (gauge._Speedneedle != null)
                 {
                     gauge._Speedneedle.RotationAngleInDegrees = angle;
@@ -600,15 +1151,15 @@ DependencyProperty.Register(nameof(CurrentneedleBrush), typeof(SolidColorBrush),
             }
         }
 
-        private static double ValueToSpeedAngle(double value)
+        private static double ValueToSpeedAngle(double value, int motorRPM)
         {
             if (value < 0)
                 return 270;
 
-            if (value > 5000)
+            if (value > motorRPM)
                 return 405;
 
-            return ((value - 0) / (5000 - 0) * (405 - 270)) + 270;
+            return ((value - 0) / (motorRPM - 0) * (405 - 270)) + 270;
         }
 
         private static double ValueToCurrentAngle(double value)

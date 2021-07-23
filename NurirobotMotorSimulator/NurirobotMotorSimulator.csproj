@@ -128,6 +128,7 @@
     <Compile Include="Helpers\HsvColor.cs" />
     <Compile Include="Helpers\SerialPortInfo.cs" />
     <Compile Include="Helpers\ThemeListener.cs" />
+    <Compile Include="Helpers\Wait.cs" />
     <Compile Include="MainPage.xaml.cs">
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
@@ -179,6 +180,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform">
       <Version>6.2.12</Version>
+    </PackageReference>
+    <PackageReference Include="NetMQ">
+      <Version>4.0.1.6</Version>
     </PackageReference>
     <PackageReference Include="System.IO.Ports">
       <Version>5.0.1</Version>
