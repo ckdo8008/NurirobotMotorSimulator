@@ -468,6 +468,7 @@
                                 // 정상 사이즈일 경우
                                 var focusdata = tmpdata.Skip(chkpos).ToArray();
                                 BroadcastData(focusdata);
+                                buffIndex = 0;
                             }
                             else
                             {
@@ -475,7 +476,7 @@
                                 Array.Copy(tmpdata, chkpos, recvBuffer, 0, tmpdata.Length - chkpos);
                                 buffIndex = tmpdata.Length;
                             }
-                            buffIndex = 0;
+  
                             break;
                         }
                         else

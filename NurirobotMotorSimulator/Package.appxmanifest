@@ -8,15 +8,15 @@
   IgnorableNamespaces="uap mp rescap">
 
   <Identity
-    Name="f5d5d9cd-bcbc-434c-828b-7dbbdbe5b038"
-    Publisher="CN=cgdo"
-    Version="1.0.0.0" />
+    Name="48796Nine4D.NurirobotMotorSimulator"
+    Publisher="CN=FFBB5380-108C-41A4-AC31-63CCAA3EFED1"
+    Version="1.0.7.0" />
 
-  <mp:PhoneIdentity PhoneProductId="f5d5d9cd-bcbc-434c-828b-7dbbdbe5b038" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="b1cb76e6-0963-40b5-98b8-521e80ca9aad" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>NurirobotMotorSimulator</DisplayName>
-    <PublisherDisplayName>cgdo</PublisherDisplayName>
+    <PublisherDisplayName>Nine4D</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
@@ -38,7 +38,7 @@
         Square44x44Logo="Assets\Square44x44Logo.png"
         Description="NurirobotMotorSimulator"
         BackgroundColor="transparent">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"/>
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" Square71x71Logo="Assets\SmallTile.png" Square310x310Logo="Assets\LargeTile.png"/>
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
     </Application>

@@ -30,6 +30,7 @@ namespace NurirobotMotorSimulator
         /// </summary>
         public App()
         {
+            //System.Diagnostics.Debugger.Break();
             this.InitializeComponent();
             this.Suspending += OnSuspending;
             Application.Current.RequestedTheme = ApplicationTheme.Light;

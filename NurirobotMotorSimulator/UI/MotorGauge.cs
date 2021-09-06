@@ -719,6 +719,318 @@ DependencyProperty.Register(nameof(MotorType), typeof(string), typeof(MotorGauge
             {
                 Debug.WriteLine(string.Format("RSA ====== recv : {0}", BitConverter.ToString(arg).Replace("-", "")));
                 NurirobotRSA rsa = new NurirobotRSA();
+                rsa.Parse(arg);
+                byte id = GetID();
+
+                if (string.Equals(rsa.PacketName, "CTRLPosSpeed"))
+                {
+                    var objrecv = (NuriPosSpeedAclCtrl)rsa.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetWantPOS(objrecv.Pos);
+                           SetWantSpeed(objrecv.Speed);
+                           //SetIsReverse(objrecv.Direction == Direction.CCW ? true : false);
+                           SetIsReverse(POSValue >= objrecv.Pos ? true : false);
+                           SetIsWantPOS(true);
+                           //SetIsWantSpeedPOS(true);
+
+                           LastTime = DateTime.Now;
+                           RemainingTime = 0;
+                           IsRunning = true;
+                       }).AsTask();
+                    tmp.Wait();
+
+                    return;
+                }
+                else if (string.Equals(rsa.PacketName, "CTRLAccPos"))
+                {
+                    var objrecv = (NuriPosSpeedAclCtrl)rsa.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetWantPOS(objrecv.Pos);
+
+                           //SetWantSpeed(0);
+                           float spd = 0f;
+                           var high = Math.Max(POSValue, objrecv.Pos);
+                           var low = Math.Min(POSValue, objrecv.Pos);
+                           var termpos = high - low;
+                           spd = (float)(termpos / (objrecv.Arrivetime * 1000f / 100f) * 7f);
+                           SetWantSpeed(spd);
+                           //SetIsReverse(objrecv.Direction == Direction.CCW ? true : false);
+                           SetIsReverse(POSValue >= objrecv.Pos ? true : false);
+                           SetIsWantPOS(true);
+                           //SetIsWantSpeedPOS(false);
+
+                           LastTime = DateTime.Now;
+                           RemainingTime = objrecv.Arrivetime * 1000;
+                           IsRunning = true;
+                       }).AsTask();
+                    tmp.Wait();
+                    return;
+                }
+                else if (string.Equals(rsa.PacketName, "CTRLAccSpeed"))
+                {
+                    var objrecv = (NuriPosSpeedAclCtrl)rsa.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetWantPOS(9999f);
+                           SetWantSpeed(objrecv.Speed);
+                           SetIsReverse(objrecv.Direction == Direction.CCW ? true : false);
+                           SetIsWantPOS(false);
+
+                           if (objrecv.Speed == 0)
+                           {
+                               if (IsRunning)
+                               {
+                                   LastTime = DateTime.Now;
+                                   RemainingTime = objrecv.Arrivetime * 1000;
+                                   IsStop = true;
+                               }
+                           }
+                           else
+                           {
+                               if (!IsRunning)
+                               {
+                                   LastTime = DateTime.Now;
+                                   RemainingTime = objrecv.Arrivetime * 1000;
+                                   IsRunning = true;
+                               }
+                               else
+                               {
+                                   LastTime = DateTime.Now;
+                                   RemainingTime = objrecv.Arrivetime * 1000;
+                               }
+                           }
+                       }).AsTask();
+                    tmp.Wait();
+                    return;
+                }
+                else if (string.Equals(rsa.PacketName, "SETPosCtrl"))
+                {
+                    var objrecv = (NuriPosSpdCtrl)rsa.GetDataStruct();
+
+                    return;
+                }
+                else if (string.Equals(rsa.PacketName, "SETSpeedCtrl"))
+                {
+                    var objrecv = (NuriPosSpdCtrl)rsa.GetDataStruct();
+
+                    return;
+                }
+                //else if (string.Equals(mc.PacketName, "SETID"))
+                //{
+                //    return;
+                //}
+                //else if (string.Equals(mc.PacketName, "SETBaudrate"))
+                //{
+                //    return;
+                //}
+                else if (string.Equals(rsa.PacketName, "SETResptime"))
+                {
+                    var objrecv = (NuriResponsetime)rsa.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetResponseWait(objrecv.Responsetime);
+                       }).AsTask();
+                    tmp.Wait();
+                    return;
+                }
+                else if (string.Equals(rsa.PacketName, "SETRatedSPD"))
+                {
+                    var objrecv = (NuriRatedSpeed)rsa.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           MotorRPM = objrecv.Speed;
+                       }).AsTask();
+                    tmp.Wait();
+
+                    return;
+                }
+                //else if (string.Equals(mc.PacketName, "SETResolution"))
+                //{
+                //    return;
+                //}
+                //else if (string.Equals(mc.PacketName, "SETRatio"))
+                //{
+                //    return;
+                //}
+                else if (string.Equals(rsa.PacketName, "SETCtrlOnOff"))
+                {
+                    var objrecv = (NuriControlOnOff)rsa.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetIsControlOnOff(objrecv.IsCtrlOn);
+                       }).AsTask();
+                    tmp.Wait();
+
+                    return;
+                }
+                else if (string.Equals(rsa.PacketName, "SETPosCtrlMode"))
+                {
+                    var objrecv = (NuriPositionCtrl)rsa.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetIsAbsolutePotionCtrl(objrecv.IsAbsolutePotionCtrl);
+                       }).AsTask();
+                    tmp.Wait();
+
+                    return;
+                }
+                else if (string.Equals(rsa.PacketName, "SETCtrlDirt"))
+                {
+                    var objrecv = (NuriCtrlDirection)rsa.GetDataStruct();
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                       () =>
+                       {
+                           SetIsReverse(objrecv.Direction == Direction.CCW);
+                       }).AsTask();
+                    tmp.Wait();
+
+                    return;
+                }
+                else if (string.Equals(rsa.PacketName, "RESETPos"))
+                {
+                    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                        () =>
+                        {
+                            POSValue = 0d;
+                        }).AsTask();
+                    tmp.Wait();
+
+                    return;
+                }
+                else if (string.Equals(rsa.PacketName, "RESETFactory"))
+                {
+                    return;
+                }
+                else if (string.Equals(rsa.PacketName, "REQPing"))
+                {
+                    rsa.PROT_FeedbackPing(new NuriProtocol
+                    {
+                        ID = id
+                    });
+                }
+                else if (string.Equals(rsa.PacketName, "REQPos"))
+                {
+                    rsa.PROT_FeedbackPOS(new NuriPosSpeedAclCtrl
+                    {
+                        ID = id,
+                        Direction = IsReverse ? Direction.CCW : Direction.CW,
+                        Pos = NowPOS,
+                        Speed = NowSpeed,
+                        Current = (short)(NowCurrent * 10)
+                    });
+                }
+                else if (string.Equals(rsa.PacketName, "REQSpeed"))
+                {
+                    rsa.PROT_FeedbackSpeed(new NuriPosSpeedAclCtrl
+                    {
+                        ID = id,
+                        Direction = IsReverse ? Direction.CCW : Direction.CW,
+                        Pos = NowPOS,
+                        Speed = NowSpeed,
+                        Current = (short)(NowCurrent * 10)
+                    });
+                }
+                else if (string.Equals(rsa.PacketName, "REQPosCtrl"))
+                {
+                    rsa.PROT_FeedbackPosControl(new NuriPosSpdCtrl
+                    {
+                        ID = id,
+                        //Protocol = (byte)ProtocolMode.FEEDPosCtrl,
+                        //Direction = 
+                    });
+                }
+                else if (string.Equals(rsa.PacketName, "REQSpdCtrl"))
+                {
+                    rsa.PROT_FeedbackSpeedControl(new NuriPosSpdCtrl
+                    {
+                        ID = id,
+                        //Protocol = (byte)ProtocolMode.FEEDSpdCtrl,
+                        //Direction = 
+                    });
+                }
+                else if (string.Equals(rsa.PacketName, "REQResptime"))
+                {
+                    rsa.PROT_FeedbackResponsetime(new NuriResponsetime
+                    {
+                        ID = id,
+                        Responsetime = (short)ResponseWait
+                    });
+                }
+                //else if (string.Equals(rsa.PacketName, "REQRatedSPD"))
+                //{
+                //    int speed = 0;
+                //    var tmp = Dispatcher.RunAsync(CoreDispatcherPriority.High,
+                //       () =>
+                //       {
+                //           speed = MotorRPM;
+                //       }).AsTask();
+                //    tmp.Wait();
+
+                //    rsa.PROT_FeedbackRatedSpeed(new NuriRatedSpeed
+                //    {
+                //        ID = id,
+                //        Speed = (ushort)speed
+                //    });
+                //}
+                //else if (string.Equals(rsa.PacketName, "REQResolution"))
+                //{
+                //    rsa.PROT_FeedbackResolution(new NuriResolution
+                //    {
+                //        ID = id
+                //    });
+                //}
+                else if (string.Equals(rsa.PacketName, "REQRatio"))
+                {
+                    rsa.PROT_FeedbackRatio(new NuriRatio
+                    {
+                        ID = id
+                    });
+                }
+                else if (string.Equals(rsa.PacketName, "REQCtrlOnOff"))
+                {
+                    rsa.PROT_FeedbackControlOnOff(new NuriControlOnOff
+                    {
+                        ID = id,
+                        IsCtrlOn = IsControlOnOff
+                    });
+                }
+                else if (string.Equals(rsa.PacketName, "REQPosCtrlMode"))
+                {
+                    rsa.PROT_FeedbackPositionControl(new NuriPositionCtrl
+                    {
+                        ID = id,
+                        IsAbsolutePotionCtrl = IsAbsolutePotionCtrl
+                    });
+                }
+                //else if (string.Equals(rsa.PacketName, "REQCtrlDirt"))
+                //{
+                //    rsa.PROT_FeedbackControlDirection(new NuriCtrlDirection
+                //    {
+                //        ID = id,
+                //        Direction = IsReverse ? Direction.CCW : Direction.CW
+                //    });
+                //}
+                else if (string.Equals(rsa.PacketName, "REQFirmware"))
+                {
+                    rsa.PROT_FeedbackFirmware(new NuriVersion
+                    {
+                        ID = id
+                    });
+                }
+                else
+                {
+                    return;
+                }
+
 
             }
             catch

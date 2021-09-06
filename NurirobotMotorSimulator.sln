@@ -5,9 +5,11 @@ VisualStudioVersion = 16.0.31112.23
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NurirobotMotorSimulator", "NurirobotMotorSimulator\NurirobotMotorSimulator.csproj", "{3D326BB0-B77B-49D6-8C05-D5F2D4B715CB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LibNuriMotor", "LibNuriMotor\LibNuriMotor.csproj", "{F2F74029-1E23-49AA-85D0-E823BD808DA9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LibNuriMotor", "LibNuriMotor\LibNuriMotor.csproj", "{F2F74029-1E23-49AA-85D0-E823BD808DA9}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "consoleWheelchair", "consoleWheelchair\consoleWheelchair.csproj", "{97652743-076F-40F3-8099-BBBAD66F1C4A}"
+EndProject
+Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "SetupNurirobotMotorSimulator", "SetupNurirobotMotorSimultator\SetupNurirobotMotorSimultator.vdproj", "{665E680D-42B1-4B99-A6FC-72C3153AD8BC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -89,6 +91,16 @@ Global
 		{97652743-076F-40F3-8099-BBBAD66F1C4A}.Release|x64.Build.0 = Release|Any CPU
 		{97652743-076F-40F3-8099-BBBAD66F1C4A}.Release|x86.ActiveCfg = Release|Any CPU
 		{97652743-076F-40F3-8099-BBBAD66F1C4A}.Release|x86.Build.0 = Release|Any CPU
+		{665E680D-42B1-4B99-A6FC-72C3153AD8BC}.Debug|Any CPU.ActiveCfg = Debug
+		{665E680D-42B1-4B99-A6FC-72C3153AD8BC}.Debug|ARM.ActiveCfg = Debug
+		{665E680D-42B1-4B99-A6FC-72C3153AD8BC}.Debug|ARM64.ActiveCfg = Debug
+		{665E680D-42B1-4B99-A6FC-72C3153AD8BC}.Debug|x64.ActiveCfg = Debug
+		{665E680D-42B1-4B99-A6FC-72C3153AD8BC}.Debug|x86.ActiveCfg = Debug
+		{665E680D-42B1-4B99-A6FC-72C3153AD8BC}.Release|Any CPU.ActiveCfg = Release
+		{665E680D-42B1-4B99-A6FC-72C3153AD8BC}.Release|ARM.ActiveCfg = Release
+		{665E680D-42B1-4B99-A6FC-72C3153AD8BC}.Release|ARM64.ActiveCfg = Release
+		{665E680D-42B1-4B99-A6FC-72C3153AD8BC}.Release|x64.ActiveCfg = Release
+		{665E680D-42B1-4B99-A6FC-72C3153AD8BC}.Release|x86.ActiveCfg = Release
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
