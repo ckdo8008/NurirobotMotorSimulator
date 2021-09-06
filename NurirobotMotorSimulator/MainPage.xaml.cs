@@ -474,7 +474,7 @@
                             {
                                 // 미처리 데이터 적제
                                 Array.Copy(tmpdata, chkpos, recvBuffer, 0, tmpdata.Length - chkpos);
-                                buffIndex = tmpdata.Length;
+                                buffIndex = tmpdata.Length - chkpos;
                             }
   
                             break;
